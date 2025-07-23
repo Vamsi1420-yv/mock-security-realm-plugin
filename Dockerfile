@@ -1,28 +1,25 @@
-# --- Build Stage ---
+# ---- Stage 1: Build plugin using Maven ----
 FROM maven:3.9.6-eclipse-temurin-11 AS builder
 
-# Set work directory
 WORKDIR /app
 
-# Copy pom first to leverage Docker layer caching
+# Copy pom.xml first to leverage Docker cache
 COPY pom.xml .
 
-# Pre-download dependencies to speed up subsequent builds
-RUN mvn -B dependency:go-offline
+# Explicitly resolve hpi packaging support
+RUN mvn -B org.apache.maven.plugins:maven-dependency-plugin:3.6.0:get \
+  -Dartifact=org.jenkins-ci.tools:maven-hpi-plugin:3.44
 
-# Copy the rest of the project
+# Now copy full source and build
 COPY . .
 
-# Build plugin (this includes hpi packaging)
-RUN mvn clean install -DskipTests
+# Build the Jenkins plugin
+RUN mvn -B clean install -DskipTests
 
-# --- Final Runtime Image ---
+# ---- Stage 2: Optional minimal image with built plugin only ----
 FROM eclipse-temurin:11-jre
-
 WORKDIR /plugin
 
-# Copy the built plugin from builder
-COPY --from=builder /app/target/*.hpi ./plugin.hpi
+COPY --from=builder /app/target/*.hpi .
 
-# Show the plugin file when container runs
 CMD ["ls", "-lh", "."]
