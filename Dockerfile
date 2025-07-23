@@ -1,23 +1,28 @@
-# -------- Build Stage --------
+# --- Build Stage ---
 FROM maven:3.9.6-eclipse-temurin-11 AS builder
 
-# Set working directory inside container
+# Set work directory
 WORKDIR /app
 
-# Copy entire project (pom.xml + source)
+# Copy pom first to leverage Docker layer caching
+COPY pom.xml .
+
+# Pre-download dependencies to speed up subsequent builds
+RUN mvn -B dependency:go-offline
+
+# Copy the rest of the project
 COPY . .
 
-# Build Jenkins plugin and skip tests to speed up CI
+# Build plugin (this includes hpi packaging)
 RUN mvn clean install -DskipTests
 
-# -------- Final Runtime Image --------
+# --- Final Runtime Image ---
 FROM eclipse-temurin:11-jre
 
-# Set workdir for final image
 WORKDIR /plugin
 
-# Copy the built .hpi file from builder image
+# Copy the built plugin from builder
 COPY --from=builder /app/target/*.hpi ./plugin.hpi
 
-# Default command to verify image content (can be changed in pipeline)
+# Show the plugin file when container runs
 CMD ["ls", "-lh", "."]
