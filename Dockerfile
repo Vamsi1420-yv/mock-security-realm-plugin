@@ -1,41 +1,23 @@
-# Stage 1: Build the plugin with Jenkins plugin repos
-FROM maven:3.9.6-eclipse-temurin-11 AS builder
+FROM jenkins/jenkins:lts-jdk17
 
-WORKDIR /app
+USER root
 
-# Inject Jenkins plugin repos without external settings.xml
-RUN mkdir -p /root/.m2 && echo '\
-<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">\
-  <profiles>\
-    <profile>\
-      <id>jenkins</id>\
-      <repositories>\
-        <repository>\
-          <id>central</id>\
-          <url>https://repo.maven.apache.org/maven2</url>\
-        </repository>\
-        <repository>\
-          <id>jenkins</id>\
-          <url>https://repo.jenkins-ci.org/public/</url>\
-        </repository>\
-        <repository>\
-          <id>incrementals</id>\
-          <url>https://repo.jenkins-ci.org/incrementals/</url>\
-        </repository>\
-      </repositories>\
-    </profile>\
-  </profiles>\
-  <activeProfiles>\
-    <activeProfile>jenkins</activeProfile>\
-  </activeProfiles>\
-</settings>' > /root/.m2/settings.xml
+# Install dependencies (optional: for CLI tools, git, etc.)
+RUN apt-get update && apt-get install -y git unzip && rm -rf /var/lib/apt/lists/*
 
-COPY . .
+# Set up plugin directory
+COPY target/mock-security-realm.hpi /usr/share/jenkins/ref/plugins/mock-security-realm.hpi
 
-RUN mvn -B clean install -DskipTests --no-transfer-progress
+# Change ownership to Jenkins user
+RUN chown -R jenkins:jenkins /usr/share/jenkins/ref/plugins
 
-# Stage 2: Runtime image (optional if you want to deploy plugin output)
-FROM eclipse-temurin:11-jre
-WORKDIR /plugin
-COPY --from=builder /app/target/*.hpi .
-CMD ["ls", "-lh", "."]
+USER jenkins
+
+# Optional: pre-install plugins via install-plugins.sh
+# COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
+# RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
+
+# Expose default port
+EXPOSE 8080
+
+# Entrypoint is already defined in base image
